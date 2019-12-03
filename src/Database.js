@@ -10,15 +10,15 @@ class AppDB {
         console.log(error);
     }
 
-    insertUser(username, hashed) {
-        this.db.query('INSERT INTO users(username, password) VALUES (?, ?)',
+    insertUser(username, hashed, cb=this._log) {
+        this.db.run('INSERT INTO users(username, password) VALUES (?, ?)',
             [username, hashed],
-            (error) => this._log(error)
+            (error) => cb(error)
         )
     }
 
     execute(statement, values, cb=this._log) {
-        this.db.run(statement, values, (error) => cb(error))
+        this.db.run(statement, values, (error, result) => cb(error))
     }
 
     fetchOne(statement, values, cb=this._log) {

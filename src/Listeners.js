@@ -18,6 +18,10 @@ class BaseSocketListener {
     listen (msg) {
         console.log("Message: "+msg);
     }
+
+    emit (msg) {
+        this.socket.emit(this.type, msg);
+    }
 }
 
 class MessageListener extends BaseSocketListener {
@@ -42,8 +46,9 @@ class DisconnectListener extends BaseSocketListener {
 }
 
 class AuthenticateListener extends BaseSocketListener {
-    constructor() {
-        super('auth')
+    constructor(handler) {
+        super('auth');
+        this.handler = handler;
     }
 
     _authenticate(username, password, cb) {
@@ -62,10 +67,9 @@ class AuthenticateListener extends BaseSocketListener {
                 bcrypt.compare(password, row.password, (err, res) => {
                     if (res) {
                         cb(true, 'Success', row.userId);
-                        return;
+                    } else {
+                        cb(false, 'Credentials do not match!');
                     }
-
-                    cb(false, 'Credentials do not match!');
                 });
             }
         );
@@ -75,53 +79,88 @@ class AuthenticateListener extends BaseSocketListener {
         let {username, password} = msg;
         this._authenticate(username, password, (success, msg, userId=null)=> {
            if (!success) {
-               this.socket.emit('auth', {
+               this.emit({
                    success: false,
                    msg: msg
                });
                return;
            }
 
-            let handler = new SocketHandler(this.socket);
-
-            addUser(userId, handler, token => {
-                this.socket.emit('auth', {
+            addUser(userId, this.handler, token => {
+                this.emit({
                     success: true,
                     token: token
                 });
             });
-            handler.init();
+
+            this.handler.initFinal();
         });
     }
 }
 
 class RegisterListener extends BaseSocketListener {
     constructor() {
-        super('register');
+        super('creation');
     }
 
-    _register(username, password) {
+    _register(username, password, cb) {
+        db.fetchOne('SELECT id FROM users WHERE username = ?', [username],
+        (err, row) => {
+            if (row) {
+                cb(false, 'User already exists!');
+                return;
+            }
 
+            bcrypt.hash(password, 10, function(err, hash) {
+                if (err) {
+                    cb(false, 'Could not add user!');
+                    return;
+                }
+
+                db.insertUser(username, hash, (err) => {
+                    if (err) {
+                        cb(false, 'Could not add user!');
+                        return;
+                    }
+
+                    cb(true, 'User added');
+                });
+            });
+        });
     }
 
     listen(msg) {
-
+        let {username, password} = msg;
+        this._register(username, password, (success, msg) => {
+            this.emit({
+                success: success,
+                msg: msg
+            });
+        });
     }
 }
 
 class SocketHandler {
     constructor(socket) {
         this.socket = socket;
+        this.authListener = new AuthenticateListener(this);
+        this.registerListener = new RegisterListener();
+
         this.messageListener = new MessageListener();
         this.disconnectListener = new DisconnectListener();
         this.listeners = [this.messageListener, this.disconnectListener];
     }
 
     init() {
+        this.authListener.init(this.socket);
+        this.registerListener.init(this.socket);
+    }
+
+    initFinal() {
         this.listeners.forEach(listener => {
            listener.init(this.socket)
         });
     }
 }
 
-module.exports = {SocketHandler, AuthenticateListener};
+module.exports = {SocketHandler};
