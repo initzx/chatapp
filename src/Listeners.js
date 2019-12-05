@@ -44,7 +44,26 @@ class MessageListener extends BaseSocketListener {
     }
 }
 
-class ConversationListener extends BaseSocketListener{
+class ConversationGetListener extends BaseSocketListener {
+    constructor() {
+        super('getConversation');
+    }
+    listen(msg) {
+        let {userId} = msg;
+        db.fetchAll('SELECT id, `to`, `from`, content, timestamp, CASE `to` WHEN $u THEN 1 ELSE 0 END isReceiver' +
+            ' FROM messages WHERE (`from` = $u AND `to` = $t) OR (`from` = $t AND `to` = $u) ORDER BY timestamp DESC',
+            {$u: this.socketHandler.userId, $t: userId}, (err, rows) => {
+                if (err) {
+                    this.emitError('Something bad happened!');
+                    return;
+                }
+                this.emitSuccess({rows: rows})
+            });
+
+    }
+}
+
+class ConversationGetallListener extends BaseSocketListener {
     constructor() {
         super('getConversations');
     }
@@ -56,7 +75,7 @@ class ConversationListener extends BaseSocketListener{
                 this.emitError({msg: 'Something bad happened!'});
                 return;
             }
-            this.emitSuccess(rows);
+            this.emitSuccess({rows: rows});
         });
     }
 }
@@ -201,8 +220,9 @@ class SocketHandler {
 
         this.messageListener = new MessageListener();
         this.disconnectListener = new DisconnectListener();
-        this.conversationListener = new ConversationListener();
-        this.listeners = [this.messageListener, this.disconnectListener, this.conversationListener];
+        this.conversationGetallListener = new ConversationGetallListener();
+        this.conversationGetListener = new ConversationGetListener();
+        this.listeners = [this.messageListener, this.disconnectListener, this.conversationGetallListener, this.conversationGetListener];
     }
 
     init() {
