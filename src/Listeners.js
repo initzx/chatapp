@@ -1,6 +1,6 @@
 const bcrypt = require('bcrypt');
 const AppDB = require('./Database');
-const {getUserFromToken, getSocket, addUser} = require('./Tokens');
+const {getUserFromToken, setUserSocketHandler, addUser, removeSocketHandler} = require('./Tokens');
 
 const db = new AppDB();
 
@@ -10,8 +10,9 @@ class BaseSocketListener {
         this.type = type;
     }
 
-    init(socket) {
-        this.socket = socket;
+    init(socketHandler) {
+        this.socketHandler = socketHandler;
+        this.socket = socketHandler.socket;
         this.socket.on(this.type, (msg) => this.listen(msg));
     }
 
@@ -21,6 +22,14 @@ class BaseSocketListener {
 
     emit(msg) {
         this.socket.emit(this.type, msg);
+    }
+
+    emitError(msg) {
+        this.emit({success: false, ...msg})
+    }
+
+    emitSuccess(msg) {
+        this.emit({success: true, ...msg})
     }
 }
 
@@ -35,20 +44,36 @@ class MessageListener extends BaseSocketListener {
     }
 }
 
+class ConversationListener extends BaseSocketListener{
+    constructor() {
+        super('getConversations');
+    }
+
+    listen(msg) {
+        db.fetchAll('SELECT id, username FROM users WHERE id != ?', [this.socketHandler.userId],
+            (error, rows) => {
+            if (error) {
+                this.emitError({msg: 'Something bad happened!'});
+                return;
+            }
+            this.emitSuccess(rows);
+        });
+    }
+}
+
 class DisconnectListener extends BaseSocketListener {
     constructor() {
         super('disconnect');
     }
 
     listen(msg) {
-        console.log(msg);
+        removeSocketHandler(this.socketHandler.userId, this.socketHandler);
     }
 }
 
 class AuthenticateListener extends BaseSocketListener {
-    constructor(handler) {
+    constructor() {
         super('auth');
-        this.handler = handler;
     }
 
     _authenticate(username, password, cb) {
@@ -86,31 +111,41 @@ class AuthenticateListener extends BaseSocketListener {
 
     listen(msg) {
         let {username, password, token} = msg;
-        let cb = (success, msg, userId) => {
-            if (!success) {
-                this.emit({
-                    success: false,
-                    msg: msg
-                });
-                return;
-            }
-            console.log("uid");
-            addUser(userId, this.handler, token => {
-                this.emit({
-                    success: true,
+        if (token) {
+            this._authenticateToken(token, (success, msg, userId) => {
+                if (!success) {
+                    this.emitError({
+                        msg: msg
+                    });
+                    return;
+                }
+
+                setUserSocketHandler(userId, this.socketHandler);
+                this.emitSuccess({
                     token: token
                 });
-            });
-            this.handler.initFinal();
-        };
 
-        if (token) {
-            this._authenticateToken(token, cb);
+                this.socketHandler.initFinal(userId);
+            });
         }
         else {
-            this._authenticate(username, password, cb);
-        }
+            this._authenticate(username, password, (success, msg, userId) => {
+                if (!success) {
+                    this.emitError({
+                        msg: msg
+                    });
+                    return;
+                }
 
+                addUser(userId, this.socketHandler, token => {
+                    this.emitSuccess({
+                        token: token
+                    });
+                });
+
+                this.socketHandler.initFinal(userId);
+            });
+        }
     }
 }
 
@@ -156,51 +191,30 @@ class RegisterListener extends BaseSocketListener {
     }
 }
 
-class ConversationListener extends BaseSocketListener {
-    constructor() {
-        super('getConversations');
-    }
-    listen() {
-        this.emit([
-            {
-                id: 1,
-                name: 'User1'
-            },
-            {
-                id: 2,
-                name: 'User2'
-            },
-            {
-                id: 3,
-                name: 'User3'
-            },
-            {
-                id: 4,
-                name: 'User4'
-            }
-        ])
-    }
-}
-
 class SocketHandler {
     constructor(socket) {
         this.socket = socket;
-        this.authListener = new AuthenticateListener(this);
+
+        this.authenticateListener = new AuthenticateListener();
         this.registerListener = new RegisterListener();
+        this.authListeners = [this.authenticateListener, this.registerListener];
 
         this.messageListener = new MessageListener();
         this.disconnectListener = new DisconnectListener();
-        this.listeners = [this.messageListener, this.disconnectListener];
+        this.conversationListener = new ConversationListener();
+        this.listeners = [this.messageListener, this.disconnectListener, this.conversationListener];
     }
 
     init() {
-        this.authListener.init(this.socket);
-        this.registerListener.init(this.socket);
+        this.authListeners.forEach(listener => {
+           listener.init(this);
+        });
     }
 
-    initFinal() {
+    initFinal(userId) {
+        this.userId = userId;
         this.listeners.forEach(listener => {
-           listener.init(this.socket)
+           listener.init(this);
         });
     }
 }
