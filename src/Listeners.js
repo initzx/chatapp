@@ -15,11 +15,11 @@ class BaseSocketListener {
         this.socket.on(this.type, (msg) => this.listen(msg));
     }
 
-    listen (msg) {
+    listen(msg) {
         console.log("Message: "+msg);
     }
 
-    emit (msg) {
+    emit(msg) {
         this.socket.emit(this.type, msg);
     }
 }
@@ -66,7 +66,7 @@ class AuthenticateListener extends BaseSocketListener {
 
                 bcrypt.compare(password, row.password, (err, res) => {
                     if (res) {
-                        cb(true, 'Success', row.userId);
+                        cb(true, 'Success', row.id);
                     } else {
                         cb(false, 'Credentials do not match!');
                     }
@@ -75,26 +75,42 @@ class AuthenticateListener extends BaseSocketListener {
         );
     }
 
-    listen(msg) {
-        let {username, password} = msg;
-        this._authenticate(username, password, (success, msg, userId=null)=> {
-           if (!success) {
-               this.emit({
-                   success: false,
-                   msg: msg
-               });
-               return;
-           }
+    _authenticateToken(token, cb) {
+        let userId = getUserFromToken(token);
+        if (!userId) {
+            cb(false, 'Invalid token!', null);
+            return;
+        }
+        cb(true, 'Success', userId)
+    }
 
+    listen(msg) {
+        let {username, password, token} = msg;
+        let cb = (success, msg, userId) => {
+            if (!success) {
+                this.emit({
+                    success: false,
+                    msg: msg
+                });
+                return;
+            }
+            console.log("uid");
             addUser(userId, this.handler, token => {
                 this.emit({
                     success: true,
                     token: token
                 });
             });
-
             this.handler.initFinal();
-        });
+        };
+
+        if (token) {
+            this._authenticateToken(token, cb);
+        }
+        else {
+            this._authenticate(username, password, cb);
+        }
+
     }
 }
 
@@ -137,6 +153,32 @@ class RegisterListener extends BaseSocketListener {
                 msg: msg
             });
         });
+    }
+}
+
+class ConversationListener extends BaseSocketListener {
+    constructor() {
+        super('getConversations');
+    }
+    listen() {
+        this.emit([
+            {
+                id: 1,
+                name: 'User1'
+            },
+            {
+                id: 2,
+                name: 'User2'
+            },
+            {
+                id: 3,
+                name: 'User3'
+            },
+            {
+                id: 4,
+                name: 'User4'
+            }
+        ])
     }
 }
 
