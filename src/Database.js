@@ -7,7 +7,9 @@ class AppDB {
     }
 
     _log(error) {
-        console.log(error);
+        if(error) {
+            console.log(error);
+        }
     }
 
     insertUser(username, hashed, cb=this._log) {
@@ -18,7 +20,7 @@ class AppDB {
     }
 
     execute(statement, values, cb=this._log) {
-        this.db.run(statement, values, (error, result) => cb(error))
+        this.db.run(statement, values, (error) => cb(error))
     }
 
     fetchOne(statement, values, cb=this._log) {

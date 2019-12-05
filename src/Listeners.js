@@ -1,6 +1,6 @@
 const bcrypt = require('bcrypt');
 const AppDB = require('./Database');
-const {getUserFromToken, setUserSocketHandler, addUser, removeSocketHandler} = require('./Tokens');
+const {getUserFromToken, setUserSocketHandler, addUser, removeSocketHandler, getSocketHandler} = require('./Tokens');
 
 const db = new AppDB();
 
@@ -35,12 +35,29 @@ class BaseSocketListener {
 
 class MessageListener extends BaseSocketListener {
     constructor() {
-        super('chat_message');
+        super('message');
+    }
+
+    sendToReceiver(msg) {
+        let receiverHandlers = getSocketHandler(msg.to);
+        if (receiverHandlers) {
+            receiverHandlers.forEach(receiverHandler =>
+                receiverHandler.socket.emit('newMessage', {isReceiver: 1, ...msg})
+            );
+        }
     }
 
     listen(msg) {
-        console.log('New message: '+msg);
-        this.emit(msg);
+        let {receiver, content} = msg;
+        let timestamp = new Date()/1;
+        db.execute('INSERT INTO messages(`from`, `to`, content, timestamp) VALUES (?, ?, ?, ?)',
+            [this.socketHandler.userId, receiver, content, timestamp]);
+
+        this.sendToReceiver({
+            to: receiver,
+            content: content,
+            timestamp: timestamp
+        });
     }
 }
 
@@ -48,10 +65,11 @@ class ConversationGetListener extends BaseSocketListener {
     constructor() {
         super('getConversation');
     }
+
     listen(msg) {
         let {userId} = msg;
-        db.fetchAll('SELECT id, `to`, `from`, content, timestamp, CASE `to` WHEN $u THEN 1 ELSE 0 END isReceiver' +
-            ' FROM messages WHERE (`from` = $u AND `to` = $t) OR (`from` = $t AND `to` = $u) ORDER BY timestamp DESC',
+        db.fetchAll('SELECT `to`, `from`, content, timestamp, CASE `to` WHEN $u THEN 1 ELSE 0 END isReceiver' +
+            ' FROM messages WHERE (`from` = $u AND `to` = $t) OR (`from` = $t AND `to` = $u) ORDER BY timestamp ASC',
             {$u: this.socketHandler.userId, $t: userId}, (err, rows) => {
                 if (err) {
                     this.emitError('Something bad happened!');
