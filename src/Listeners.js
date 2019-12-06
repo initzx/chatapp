@@ -63,7 +63,7 @@ class MessageListener extends BaseSocketListener {
 
 class ConversationGetListener extends BaseSocketListener {
     constructor() {
-        super('getConversation');
+        super('getConversationMessages');
     }
 
     listen(msg) {
@@ -75,7 +75,7 @@ class ConversationGetListener extends BaseSocketListener {
                     this.emitError('Something bad happened!');
                     return;
                 }
-                this.emitSuccess({rows: rows})
+                this.emitSuccess({messages: rows})
             });
 
     }
@@ -93,7 +93,7 @@ class ConversationGetallListener extends BaseSocketListener {
                 this.emitError({msg: 'Something bad happened!'});
                 return;
             }
-            this.emitSuccess({rows: rows});
+            this.emitSuccess({conversations: rows});
         });
     }
 }
