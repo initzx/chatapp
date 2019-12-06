@@ -42,7 +42,7 @@ class MessageListener extends BaseSocketListener {
         let receiverHandlers = getSocketHandler(msg.to);
         if (receiverHandlers) {
             receiverHandlers.forEach(receiverHandler =>
-                receiverHandler.socket.emit('newMessage', {isReceiver: 1, ...msg})
+                receiverHandler.socket.emit('newMessage', {isReceiver: 1, from: this.socketHandler.userId, ...msg})
             );
         }
     }
