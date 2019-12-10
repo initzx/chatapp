@@ -4,7 +4,10 @@ const {getUserFromToken, setUserSocketHandler, addUser, removeSocketHandler, get
 
 const db = new AppDB();
 
-class BaseSocketListener {
+class BaseSocketEndpoint {
+    /*
+    Abstract base endpoint for all of the endpoints
+     */
 
     constructor(type) {
         this.type = type;
@@ -33,7 +36,10 @@ class BaseSocketListener {
     }
 }
 
-class MessageListener extends BaseSocketListener {
+class MessageEndpoint extends BaseSocketEndpoint {
+    /*
+    This endpoint is accessed when the user decides to send a message
+     */
     constructor() {
         super('message');
     }
@@ -61,7 +67,10 @@ class MessageListener extends BaseSocketListener {
     }
 }
 
-class ConversationGetListener extends BaseSocketListener {
+class ConversationGetEndpoint extends BaseSocketEndpoint {
+    /*
+    This endpoint returns the messages that have been sent in a conversation
+     */
     constructor() {
         super('getConversationMessages');
     }
@@ -81,7 +90,10 @@ class ConversationGetListener extends BaseSocketListener {
     }
 }
 
-class ConversationGetallListener extends BaseSocketListener {
+class ConversationGetAllEndpoint extends BaseSocketEndpoint {
+    /*
+    This endpoint is accessed when the user attempts to fetch all of the users on the network
+     */
     constructor() {
         super('getConversations');
     }
@@ -98,7 +110,10 @@ class ConversationGetallListener extends BaseSocketListener {
     }
 }
 
-class DisconnectListener extends BaseSocketListener {
+class DisconnectEndpoint extends BaseSocketEndpoint {
+    /*
+    This endpoint is called when the user disconnects
+     */
     constructor() {
         super('disconnect');
     }
@@ -108,7 +123,10 @@ class DisconnectListener extends BaseSocketListener {
     }
 }
 
-class AuthenticateListener extends BaseSocketListener {
+class AuthenticateEndpoint extends BaseSocketEndpoint {
+    /*
+    This endpoint authenticates the user first time they connect
+     */
     constructor() {
         super('auth');
     }
@@ -186,7 +204,11 @@ class AuthenticateListener extends BaseSocketListener {
     }
 }
 
-class RegisterListener extends BaseSocketListener {
+class RegisterEndpoint extends BaseSocketEndpoint {
+    /*
+    This endpoint registers a user to the database
+     */
+
     constructor() {
         super('creation');
     }
@@ -229,29 +251,39 @@ class RegisterListener extends BaseSocketListener {
 }
 
 class SocketHandler {
+    /*
+    A container class for user socket endpoints
+
+    The SocketHandler is unique to every user and contains the socket object
+    for that user's connection. SocketHandler is initialized when a user connects
+    to the server, the endpoints for which the user can access are also subsequently
+    initialized here.
+
+     */
+
     constructor(socket) {
         this.socket = socket;
 
-        this.authenticateListener = new AuthenticateListener();
-        this.registerListener = new RegisterListener();
-        this.authListeners = [this.authenticateListener, this.registerListener];
+        this.authenticateEndpoint = new AuthenticateEndpoint();
+        this.registerEndpoint = new RegisterEndpoint();
+        this.authEndpoints = [this.authenticateEndpoint, this.registerEndpoint];
 
-        this.messageListener = new MessageListener();
-        this.disconnectListener = new DisconnectListener();
-        this.conversationGetallListener = new ConversationGetallListener();
-        this.conversationGetListener = new ConversationGetListener();
-        this.listeners = [this.messageListener, this.disconnectListener, this.conversationGetallListener, this.conversationGetListener];
+        this.messageEndpoint = new MessageEndpoint();
+        this.disconnectEndpoint = new DisconnectEndpoint();
+        this.conversationGetAllEndpoint = new ConversationGetAllEndpoint();
+        this.conversationGetEndpoint = new ConversationGetEndpoint();
+        this.endpoints = [this.messageEndpoint, this.disconnectEndpoint, this.conversationGetAllEndpoint, this.conversationGetEndpoint];
     }
 
     init() {
-        this.authListeners.forEach(listener => {
+        this.authEndpoints.forEach(listener => {
            listener.init(this);
         });
     }
 
     initFinal(userId) {
         this.userId = userId;
-        this.listeners.forEach(listener => {
+        this.endpoints.forEach(listener => {
            listener.init(this);
         });
     }
