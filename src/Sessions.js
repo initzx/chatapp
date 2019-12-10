@@ -1,11 +1,11 @@
 const UIDGenerator = require('uid-generator');
 const uidgen = new UIDGenerator();
 
-const tokens = [];
+const sessions = [];
 const socketHandlers = [];
 
 let getUserFromToken = (token) => {
-    return tokens[token];
+    return sessions[token];
 };
 
 let getSocketHandler = (userId) => {
@@ -34,7 +34,7 @@ let setUserSocketHandler = (userId, socketHandler) => {
 };
 
 let setUserToken = (userId, token) => {
-    tokens[token] = userId;
+    sessions[token] = userId;
 };
 
 module.exports = {getUserFromToken, getSocketHandler, addUser, setUserToken, setUserSocketHandler, removeSocketHandler};

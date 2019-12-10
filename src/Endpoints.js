@@ -1,6 +1,6 @@
 const bcrypt = require('bcrypt');
 const AppDB = require('./Database');
-const {getUserFromToken, setUserSocketHandler, addUser, removeSocketHandler, getSocketHandler} = require('./Tokens');
+const {getUserFromToken, setUserSocketHandler, addUser, removeSocketHandler, getSocketHandler} = require('./Sessions');
 
 const db = new AppDB();
 
